@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Midwest Vitals</title>
+  <meta name="description" content="The U.S., Illinois and Wisconsin economies, plus their banks and credit unions, on one page of charts updated as new data are released.">
+  <meta name="theme-color" content="#14284b">
+  <link rel="stylesheet" href="styles.css">
+  <script src="vendor/chart.umd.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap masthead-inner">
+      <div>
+        <h1 id="site-title">Midwest Vitals</h1>
+        <p id="site-subtitle" class="subtitle"></p>
+      </div>
+      <div class="meta">
+        <span id="updated" class="updated"></span>
+        <div class="range" role="group" aria-label="Time range">
+          <button type="button" data-years="2">2Y</button>
+          <button type="button" data-years="5" aria-pressed="true">5Y</button>
+          <button type="button" data-years="10">10Y</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="sample-banner" class="banner" hidden>
+    Sample data for layout preview only. Run <code>python -m pipeline.build</code> with a FRED key for real figures.
+  </div>
+
+  <nav class="sections-nav" aria-label="Sections">
+    <div class="wrap" id="nav"></div>
+  </nav>
+
+  <main class="wrap">
+    <section id="scorecard" class="scorecard" aria-label="Latest readings"></section>
+    <div id="sections"></div>
+    <p id="load-error" class="load-error" hidden>Could not load data/dashboard.json. Run the pipeline first, then serve the site folder (for example <code>python -m http.server -d site</code>).</p>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <h2>Sources and methods</h2>
+      <p>Economic series come from FRED (Federal Reserve Bank of St. Louis), which republishes data from BEA, BLS, the Census Bureau, FHFA, the Treasury, and the Philadelphia and Chicago Federal Reserve Banks. Bank figures are computed from FDIC BankFind quarterly call report data; credit union figures from NCUA quarterly 5300 call report files. Each chart links to its underlying series.</p>
+      <p>State coverage has gaps the national data does not. There is no state-level CPI, so Chicago metro and Midwest regional indexes stand in. State GDP and personal income arrive roughly a quarter after national figures. Bank and credit union data are by headquarters state, and institutions are counted where they are chartered, not where they lend.</p>
+      <p>Section summaries labeled as AI-generated are written automatically from the figures on this page and are not reviewed before publishing. This page is an independent project and is not affiliated with or endorsed by any employer or institution.</p>
+    </div>
+  </footer>
+</body>
+</html>

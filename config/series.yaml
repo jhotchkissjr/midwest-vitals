@@ -1,0 +1,475 @@
+# Midwest Vitals: single source of truth for every chart on the site.
+#
+# The pipeline reads this file, fetches each series, applies the listed
+# transforms, and writes site/data/dashboard.json. The site never hardcodes
+# a series; to add or change a chart, edit this file only.
+#
+# Chart fields
+#   id         unique slug
+#   title      chart title shown on the site
+#   units      y-axis label
+#   source     fred | fdic | ncua
+#   style      line (default) | bar
+#   note       optional footnote (caveats, definitions)
+#   series     list of lines on the chart
+#
+# Series fields (fred)
+#   geo        US | IL | WI | CHI | MW  (drives color and the legend label)
+#   id         FRED series ID
+#   label      optional legend label override
+#   resample   optional: M (monthly mean) | Q (quarterly mean) | W (weekly mean)
+#   transform  list of steps, applied in order:
+#                level        no change (default)
+#                yoy          percent change vs one year earlier
+#                ann_rate     annualized period-over-period percent change
+#                diff         period-over-period difference
+#                maN          N-period moving average (ma3, ma4, ...)
+#                roll12_sum   rolling 12-period sum
+#                index_2019   rebased so the 2019 average = 100
+#                scale:X      multiply by X (e.g. scale:0.001)
+#
+# Series fields (fdic, ncua)
+#   geo        US | IL | WI
+#   metric     a metric name computed in pipeline/fdic.py or pipeline/ncua.py
+#
+# IDs marked "verify" are best-known IDs. Run `python -m pipeline.validate`
+# before the first real build; it flags any ID FRED does not recognize and
+# suggests replacements.
+
+site:
+  title: "Midwest Vitals"
+  subtitle: "The U.S., Illinois and Wisconsin economies, plus their banks and credit unions, on one page. Public data, updated automatically."
+  display_start: "2016-01-01"
+
+geos:
+  # slot = categorical color slot (see --series-N in site/styles.css). Colors
+  # follow the entity: Chicago CPI is the Illinois proxy, Midwest CPI the
+  # Wisconsin proxy, so they share those slots. Slots 1-3 were checked for
+  # colorblind separation in light and dark mode.
+  US:  {label: "United States",  slot: 1}
+  IL:  {label: "Illinois",       slot: 2}
+  WI:  {label: "Wisconsin",      slot: 3}
+  CHI: {label: "Chicago metro",  slot: 2}
+  MW:  {label: "Midwest region", slot: 3}
+
+# Charts whose latest readings appear in the summary strip at the top.
+scorecard:
+  - unemployment_rate
+  - payrolls_yoy
+  - real_gdp_growth
+  - cpi_yoy
+  - house_prices_yoy
+  - bank_deposit_growth
+  - cu_share_growth
+
+sections:
+
+  # ----------------------------------------------------------------- GROWTH
+  - id: growth
+    title: "Growth"
+    charts:
+      - id: real_gdp_growth
+        title: "Real GDP growth"
+        units: "% annualized, q/q"
+        source: fred
+        note: "State GDP is published by BEA about one quarter after the national estimate."
+        series:
+          - {geo: US, id: GDPC1,   transform: [ann_rate]}
+          - {geo: IL, id: ILRQGSP, transform: [ann_rate]}   # verify
+          - {geo: WI, id: WIRQGSP, transform: [ann_rate]}   # verify
+
+      - id: coincident_index
+        title: "State coincident index"
+        units: "% y/y"
+        source: fred
+        note: "Philadelphia Fed coincident indexes combine payrolls, hours, unemployment and wages into a monthly read on state activity."
+        series:
+          - {geo: US, id: USPHCI, transform: [yoy]}
+          - {geo: IL, id: ILPHCI, transform: [yoy]}
+          - {geo: WI, id: WIPHCI, transform: [yoy]}
+
+      - id: personal_income_yoy
+        title: "Personal income"
+        units: "% y/y, nominal"
+        source: fred
+        note: "U.S. is monthly; states are quarterly (BEA)."
+        series:
+          - {geo: US, id: PI,     transform: [yoy]}
+          - {geo: IL, id: ILOTOT, transform: [yoy]}
+          - {geo: WI, id: WIOTOT, transform: [yoy]}
+
+      - id: cfnai
+        title: "Chicago Fed National Activity Index"
+        units: "3-month average (0 = trend growth)"
+        source: fred
+        series:
+          - {geo: US, id: CFNAIMA3}
+
+  # ------------------------------------------------------------------- JOBS
+  - id: jobs
+    title: "Jobs"
+    charts:
+      - id: unemployment_rate
+        title: "Unemployment rate"
+        units: "%"
+        source: fred
+        series:
+          - {geo: US, id: UNRATE}
+          - {geo: IL, id: ILUR}
+          - {geo: WI, id: WIUR}
+
+      - id: payrolls_yoy
+        title: "Nonfarm payroll growth"
+        units: "% y/y"
+        source: fred
+        series:
+          - {geo: US, id: PAYEMS, transform: [yoy]}
+          - {geo: IL, id: ILNA,   transform: [yoy]}
+          - {geo: WI, id: WINA,   transform: [yoy]}
+
+      - id: payrolls_monthly_change
+        title: "U.S. monthly payroll change"
+        units: "thousands of jobs"
+        source: fred
+        style: bar
+        display_start: "2023-01-01"
+        series:
+          - {geo: US, id: PAYEMS, transform: [diff]}
+
+      - id: participation
+        title: "Labor force participation rate"
+        units: "%"
+        source: fred
+        series:
+          - {geo: US, id: CIVPART}
+          - {geo: IL, id: LBSSA17}
+          - {geo: WI, id: LBSSA55}
+
+      - id: initial_claims
+        title: "Initial jobless claims"
+        units: "4-week average, 2019 = 100"
+        source: fred
+        note: "Indexed so states and the nation share one scale."
+        display_start: "2021-07-01"
+        series:
+          - {geo: US, id: ICSA,      transform: [ma4, index_2019]}
+          - {geo: IL, id: ILICLAIMS, transform: [ma4, index_2019]}
+          - {geo: WI, id: WIICLAIMS, transform: [ma4, index_2019]}
+
+      - id: wages_yoy
+        title: "Average hourly earnings, private"
+        units: "% y/y"
+        source: fred
+        note: "State series are not seasonally adjusted; y/y comparison handles that."
+        series:
+          - {geo: US, id: CES0500000003,        transform: [yoy]}
+          - {geo: IL, id: SMU17000000500000003, transform: [yoy]}   # verify
+          - {geo: WI, id: SMU55000000500000003, transform: [yoy]}   # verify
+
+      - id: job_openings_rate
+        title: "U.S. job openings rate"
+        units: "% of employment plus openings"
+        source: fred
+        series:
+          - {geo: US, id: JTSJOR}
+
+  # -------------------------------------------------------------- INFLATION
+  - id: inflation
+    title: "Inflation"
+    charts:
+      - id: cpi_yoy
+        title: "Consumer prices"
+        units: "% y/y"
+        source: fred
+        note: "BLS does not publish state CPI. Chicago metro covers most of Illinois' population; the Midwest regional index is the closest available proxy for Wisconsin."
+        series:
+          - {geo: US,  id: CPIAUCSL,    transform: [yoy]}
+          - {geo: CHI, id: CUURA207SA0, transform: [yoy]}   # verify
+          - {geo: MW,  id: CUUR0200SA0, transform: [yoy]}
+
+      - id: core_cpi_yoy
+        title: "Core consumer prices (ex food and energy)"
+        units: "% y/y"
+        source: fred
+        series:
+          - {geo: US,  id: CPILFESL,        transform: [yoy]}
+          - {geo: CHI, id: CUURA207SA0L1E,  transform: [yoy]}   # verify
+          - {geo: MW,  id: CUUR0200SA0L1E,  transform: [yoy]}   # verify
+
+      - id: core_pce_yoy
+        title: "Core PCE prices (Fed target measure)"
+        units: "% y/y"
+        source: fred
+        series:
+          - {geo: US, id: PCEPILFE, transform: [yoy]}
+
+      - id: breakevens
+        title: "5-year breakeven inflation"
+        units: "%, monthly average"
+        source: fred
+        series:
+          - {geo: US, id: T5YIE, resample: M}
+
+  # ---------------------------------------------------------------- HOUSING
+  - id: housing
+    title: "Housing"
+    charts:
+      - id: house_prices_yoy
+        title: "House prices (FHFA)"
+        units: "% y/y"
+        source: fred
+        series:
+          - {geo: US, id: USSTHPI, transform: [yoy]}
+          - {geo: IL, id: ILSTHPI, transform: [yoy]}
+          - {geo: WI, id: WISTHPI, transform: [yoy]}
+
+      - id: permits
+        title: "Residential building permits"
+        units: "3-month average, 2019 = 100"
+        source: fred
+        series:
+          - {geo: US, id: PERMIT,     transform: [ma3, index_2019]}
+          - {geo: IL, id: ILBPPRIVSA, transform: [ma3, index_2019]}
+          - {geo: WI, id: WIBPPRIVSA, transform: [ma3, index_2019]}
+
+      - id: mortgage_rate
+        title: "30-year fixed mortgage rate"
+        units: "%, monthly average"
+        source: fred
+        series:
+          - {geo: US, id: MORTGAGE30US, resample: M}
+
+  # --------------------------------------------------- FINANCIAL CONDITIONS
+  - id: financial
+    title: "Rates and financial conditions"
+    charts:
+      - id: rates
+        title: "Policy rate and Treasury yields"
+        units: "%, monthly average"
+        source: fred
+        series:
+          - {geo: US, id: DFF,   label: "Fed funds", resample: M}
+          - {geo: US, id: DGS2,  label: "2-year",    resample: M}
+          - {geo: US, id: DGS10, label: "10-year",   resample: M}
+
+      - id: curve
+        title: "Yield curve: 10-year minus 2-year"
+        units: "percentage points, monthly average"
+        source: fred
+        series:
+          - {geo: US, id: T10Y2Y, resample: M}
+
+      - id: nfci
+        title: "Chicago Fed National Financial Conditions Index"
+        units: "index (above 0 = tighter than average)"
+        source: fred
+        series:
+          - {geo: US, id: NFCI}
+
+      - id: hy_spread
+        title: "High-yield corporate bond spread"
+        units: "percentage points, monthly average"
+        source: fred
+        series:
+          - {geo: US, id: BAMLH0A0HYM2, resample: M}
+
+  # ----------------------------------------------------------------- FISCAL
+  - id: fiscal
+    title: "Federal budget"
+    charts:
+      - id: deficit_12m
+        title: "Federal deficit, rolling 12 months"
+        units: "$ billions (negative = deficit)"
+        source: fred
+        series:
+          - {geo: US, id: MTSDS133FMS, transform: [roll12_sum, "scale:0.001"]}
+
+      - id: deficit_gdp
+        title: "Federal surplus or deficit"
+        units: "% of GDP, fiscal year"
+        source: fred
+        style: bar
+        series:
+          - {geo: US, id: FYFSGDA188S}
+
+      - id: debt_gdp
+        title: "Federal debt held by the public"
+        units: "% of GDP"
+        source: fred
+        series:
+          - {geo: US, id: FYGFGDQ188S}
+
+  # ------------------------------------------------------------------ BANKS
+  # Computed in pipeline/fdic.py from FDIC BankFind quarterly financials.
+  # "Community" = banks under $10 billion in total assets in that quarter.
+  - id: banks
+    title: "Banks (FDIC-insured)"
+    intro: "Illinois figures are by headquarters state, so a handful of very large Chicago-chartered banks would dominate any all-bank aggregate. Ratios below are medians across banks; growth rates use the community bank cohort (under $10 billion)."
+    charts:
+      - id: bank_count
+        title: "Number of banks headquartered in state"
+        units: "count"
+        source: fdic
+        note: "U.S. omitted so the state lines stay readable."
+        series:
+          - {geo: IL, metric: count}
+          - {geo: WI, metric: count}
+
+      - id: bank_deposit_growth
+        title: "Community bank deposit growth"
+        units: "% y/y, aggregate of banks under $10B"
+        source: fdic
+        note: "Cohort membership changes as banks cross $10B or merge; treat single-quarter jumps with care."
+        series:
+          - {geo: US, metric: community_deposits_yoy}
+          - {geo: IL, metric: community_deposits_yoy}
+          - {geo: WI, metric: community_deposits_yoy}
+
+      - id: bank_loan_growth
+        title: "Community bank loan growth"
+        units: "% y/y, aggregate of banks under $10B"
+        source: fdic
+        series:
+          - {geo: US, metric: community_loans_yoy}
+          - {geo: IL, metric: community_loans_yoy}
+          - {geo: WI, metric: community_loans_yoy}
+
+      - id: bank_ltd
+        title: "Loan-to-deposit ratio"
+        units: "%, median bank"
+        source: fdic
+        series:
+          - {geo: US, metric: median_ltd}
+          - {geo: IL, metric: median_ltd}
+          - {geo: WI, metric: median_ltd}
+
+      - id: bank_liquid_assets
+        title: "Cash and securities share of assets"
+        units: "%, median bank"
+        source: fdic
+        series:
+          - {geo: US, metric: median_liquid_assets}
+          - {geo: IL, metric: median_liquid_assets}
+          - {geo: WI, metric: median_liquid_assets}
+
+      - id: bank_fhlb_advances
+        title: "FHLB advances share of assets"
+        units: "%, aggregate of banks under $10B"
+        source: fdic
+        series:
+          - {geo: US, metric: community_fhlb_share}
+          - {geo: IL, metric: community_fhlb_share}
+          - {geo: WI, metric: community_fhlb_share}
+
+      - id: bank_brokered
+        title: "Brokered deposits share of deposits"
+        units: "%, aggregate of banks under $10B"
+        source: fdic
+        series:
+          - {geo: US, metric: community_brokered_share}
+          - {geo: IL, metric: community_brokered_share}
+          - {geo: WI, metric: community_brokered_share}
+
+      - id: bank_nim
+        title: "Net interest margin"
+        units: "%, median bank, annualized YTD"
+        source: fdic
+        series:
+          - {geo: US, metric: median_nim}
+          - {geo: IL, metric: median_nim}
+          - {geo: WI, metric: median_nim}
+
+      - id: bank_roa
+        title: "Return on assets"
+        units: "%, median bank, annualized YTD"
+        source: fdic
+        series:
+          - {geo: US, metric: median_roa}
+          - {geo: IL, metric: median_roa}
+          - {geo: WI, metric: median_roa}
+
+      - id: bank_noncurrent
+        title: "Noncurrent loans"
+        units: "% of loans, median bank"
+        source: fdic
+        series:
+          - {geo: US, metric: median_noncurrent}
+          - {geo: IL, metric: median_noncurrent}
+          - {geo: WI, metric: median_noncurrent}
+
+      - id: bank_capital
+        title: "Equity capital to assets"
+        units: "%, median bank"
+        source: fdic
+        series:
+          - {geo: US, metric: median_equity_assets}
+          - {geo: IL, metric: median_equity_assets}
+          - {geo: WI, metric: median_equity_assets}
+
+  # ---------------------------------------------------------- CREDIT UNIONS
+  # Computed in pipeline/ncua.py from NCUA quarterly 5300 call report files.
+  - id: credit_unions
+    title: "Credit unions (NCUA-insured)"
+    intro: "Federally insured credit unions by state of headquarters. Growth rates are aggregates; ratios are medians across credit unions."
+    charts:
+      - id: cu_count
+        title: "Number of credit unions headquartered in state"
+        units: "count"
+        source: ncua
+        series:
+          - {geo: IL, metric: count}
+          - {geo: WI, metric: count}
+
+      - id: cu_share_growth
+        title: "Share and deposit growth"
+        units: "% y/y, aggregate"
+        source: ncua
+        series:
+          - {geo: US, metric: shares_yoy}
+          - {geo: IL, metric: shares_yoy}
+          - {geo: WI, metric: shares_yoy}
+
+      - id: cu_loan_growth
+        title: "Loan growth"
+        units: "% y/y, aggregate"
+        source: ncua
+        series:
+          - {geo: US, metric: loans_yoy}
+          - {geo: IL, metric: loans_yoy}
+          - {geo: WI, metric: loans_yoy}
+
+      - id: cu_lts
+        title: "Loan-to-share ratio"
+        units: "%, median credit union"
+        source: ncua
+        series:
+          - {geo: US, metric: median_lts}
+          - {geo: IL, metric: median_lts}
+          - {geo: WI, metric: median_lts}
+
+      - id: cu_net_worth
+        title: "Net worth ratio"
+        units: "% of assets, median credit union"
+        source: ncua
+        series:
+          - {geo: US, metric: median_net_worth}
+          - {geo: IL, metric: median_net_worth}
+          - {geo: WI, metric: median_net_worth}
+
+      - id: cu_roa
+        title: "Return on assets"
+        units: "%, median credit union, annualized YTD"
+        source: ncua
+        series:
+          - {geo: US, metric: median_roa}
+          - {geo: IL, metric: median_roa}
+          - {geo: WI, metric: median_roa}
+
+      - id: cu_delinquency
+        title: "Delinquent loans"
+        units: "% of loans, aggregate"
+        source: ncua
+        series:
+          - {geo: US, metric: delinquency_rate}
+          - {geo: IL, metric: delinquency_rate}
+          - {geo: WI, metric: delinquency_rate}
