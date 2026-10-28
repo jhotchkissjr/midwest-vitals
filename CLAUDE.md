@@ -44,7 +44,7 @@ Work through these in order and report results to the owner.
 
 - No em dashes anywhere: UI copy, config titles and notes, docs, commit messages, AI prompts. Use commas, colons, parentheses or separate sentences.
 - Chart titles say what is measured; `units` says how (for example "% y/y", "%, median bank").
-- Colors come from categorical slots 1 to 3 (`--series-N` in `site/styles.css`): U.S. = 1, Illinois = 2, Wisconsin = 3. Proxies share their state's slot (Chicago = 2, Midwest = 3). Do not add ad hoc colors. If a chart ever needs more than three series, split it or use small multiples.
+- Colors come from categorical slots 1 to 3 (`--series-N` in `site/styles.css`): U.S. = 1 (navy blue), Illinois = 2 (red), Wisconsin = 3 (teal). The corporate gold is not a series color because it is too close to the red for colorblind readers. Proxies share their state's slot (Chicago = 2, Midwest = 3). Do not add ad hoc colors. If a chart ever needs more than three series, split it or use small multiples.
 - One y-axis per chart. If scales differ (for example claims), index to a common base rather than adding a second axis.
 - Bank and credit union metrics: prefer medians for ratios and the sub-$10B community cohort for growth, because large Chicago-chartered banks distort Illinois aggregates.
 - Keep the site dependency-free beyond vendored Chart.js. If you upgrade Chart.js, replace `site/vendor/chart.umd.min.js` and its license file together.
@@ -63,5 +63,5 @@ Work through these in order and report results to the owner.
 ## Things not to do
 
 - Do not publish institution-level tables or name individual banks or credit unions; the page is aggregate by design.
-- Do not add any employer branding or member data.
+- Do not add employer names, logos, taglines or member data. The color palette and font (Verdana) follow the owner's corporate style by the owner's decision; that is the only branding allowed.
 - Do not let the AI summaries state causes, forecasts or facts not in the data; keep the system prompt rules in `ai_notes.py`.
