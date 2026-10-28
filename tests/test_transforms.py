@@ -36,6 +36,21 @@ def test_index_2019():
     assert out.loc["2020-06-01"] == pytest.approx(150.0)
 
 
+def test_index_2019_seasonal_monthly():
+    # Strong seasonal pattern: January high, other months low, both years identical
+    s = monthly(([200.0] + [50.0] * 11) * 2, start="2019-01-01")
+    out = transforms.apply(s, ["index_2019_seasonal"], "M")
+    assert out.loc["2020-01-01"] == pytest.approx(100.0)
+    assert out.loc["2020-07-01"] == pytest.approx(100.0)  # annual base would give 80
+
+
+def test_index_2019_seasonal_weekly():
+    idx = pd.date_range("2019-01-05", periods=104, freq="W-SAT")
+    s = pd.Series([float(w.isocalendar()[1]) for w in idx], index=idx)
+    out = transforms.apply(s, ["index_2019_seasonal"], "W")
+    assert (out.loc["2020-01-01":] == 100.0).all()
+
+
 def test_chain_ma_then_index_and_scale():
     s = monthly(list(range(1, 37)), start="2018-01-01")
     out = transforms.apply(s, ["ma3", "scale:2"], "M")

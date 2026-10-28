@@ -16,14 +16,13 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-from .transforms import _year_ago
-
 log = logging.getLogger(__name__)
 
 URL = "https://banks.data.fdic.gov/api/financials"
 CACHE = Path("data_cache/fdic_raw.csv.gz")
 CACHE_MAX_AGE_HOURS = 20
 COMMUNITY_MAX_ASSETS = 10_000_000  # $10B, in thousands
+ACQUISITION_GROWTH = 1.30  # asset growth above 30% y/y is treated as an acquisition
 
 # FDIC field -> meaning. pipeline.validate checks every one of these.
 FIELDS = {
@@ -106,6 +105,30 @@ def _metrics_for(group: pd.DataFrame) -> dict:
     }
 
 
+def _matched_growth(df: pd.DataFrame, col: str) -> pd.Series:
+    """Y/y % growth in `col` for the same banks at both dates.
+
+    The cohort is fixed a year earlier (banks under $10B then that still report
+    now), so banks that grow past $10B, merge away or close do not drop out of
+    one side of the comparison and drag growth down. Banks whose assets jumped
+    more than ACQUISITION_GROWTH are left out, because an acquired bank's
+    balances would otherwise count as growth.
+    """
+    by_date = {d: g.set_index("CERT") for d, g in df.groupby("date")}
+    out = {}
+    for d, now in by_date.items():
+        then = by_date.get(d - pd.DateOffset(years=1))
+        if then is None:
+            continue
+        small = then[(then["ASSET"] > 0) & (then["ASSET"] < COMMUNITY_MAX_ASSETS)]
+        cohort = small.index.intersection(now.index)
+        cohort = cohort[now.loc[cohort, "ASSET"] <= small.loc[cohort, "ASSET"] * ACQUISITION_GROWTH]
+        base = small.loc[cohort, col].sum()
+        if base > 0:
+            out[d] = (now.loc[cohort, col].sum() / base - 1) * 100
+    return pd.Series(out, dtype=float)
+
+
 def compute_metrics(raw: pd.DataFrame, geos=("US", "IL", "WI")) -> pd.DataFrame:
     """Long frame: geo, date, metric, value."""
     df = raw.copy()
@@ -117,10 +140,8 @@ def compute_metrics(raw: pd.DataFrame, geos=("US", "IL", "WI")) -> pd.DataFrame:
     for geo in geos:
         sub = df if geo == "US" else df[df["STALP"] == geo]
         wide = pd.DataFrame({d: _metrics_for(g) for d, g in sub.groupby("date")}).T.sort_index()
-        for level_col, yoy_col in [("community_deposits", "community_deposits_yoy"),
-                                   ("community_loans", "community_loans_yoy")]:
-            s = wide[level_col]
-            wide[yoy_col] = (s / _year_ago(s) - 1) * 100
+        for col, yoy_col in [("DEP", "community_deposits_yoy"), ("LNLSNET", "community_loans_yoy")]:
+            wide[yoy_col] = _matched_growth(sub, col).reindex(wide.index)
         long = wide.reset_index(names="date").melt(id_vars="date", var_name="metric", value_name="value")
         long["geo"] = geo
         out.append(long.dropna())

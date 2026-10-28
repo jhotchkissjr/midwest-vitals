@@ -32,6 +32,29 @@ def test_fdic_metrics():
     assert get("IL", "community_fhlb_share") == pytest.approx(100 * 0.04 / 1.1, rel=1e-6)
 
 
+def test_fdic_growth_keeps_banks_that_cross_10b():
+    raw = fake_fdic()
+    # Bank 4 grows from $9.5B to $10.5B: still in the cohort fixed a year earlier
+    for d, asset in [("20240630", 9_500_000), ("20250630", 10_500_000)]:
+        raw.loc[len(raw)] = {**raw.iloc[0].to_dict(), "CERT": 4, "REPDTE": d, "ASSET": asset, "DEP": asset * 0.8}
+    # Bank 5 disappears (merged away): dropped from both sides, not counted as a loss
+    raw.loc[len(raw)] = {**raw.iloc[0].to_dict(), "CERT": 5, "REPDTE": "20240630", "DEP": 900_000}
+    m = fdic.compute_metrics(raw)
+    val = m[(m.geo == "IL") & (m.metric == "community_deposits_yoy")]["value"].iloc[-1]
+    expected = (400_000 * 1.1 + 8_400_000) / (400_000 + 7_600_000)
+    assert val == pytest.approx((expected - 1) * 100)
+
+
+def test_fdic_growth_skips_likely_acquirers():
+    raw = fake_fdic()
+    # Bank 6 doubles in a year by buying another bank: left out, so IL growth stays 10%
+    for d, asset in [("20240630", 1_000_000), ("20250630", 2_000_000)]:
+        raw.loc[len(raw)] = {**raw.iloc[0].to_dict(), "CERT": 6, "REPDTE": d, "ASSET": asset, "DEP": asset * 0.8}
+    m = fdic.compute_metrics(raw)
+    val = m[(m.geo == "IL") & (m.metric == "community_deposits_yoy")]["value"].iloc[-1]
+    assert val == pytest.approx(10.0)
+
+
 def fake_ncua_zip():
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:

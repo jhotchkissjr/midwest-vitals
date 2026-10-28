@@ -26,6 +26,8 @@
 #                maN          N-period moving average (ma3, ma4, ...)
 #                roll12_sum   rolling 12-period sum
 #                index_2019   rebased so the 2019 average = 100
+#                index_2019_seasonal   rebased so the same week, month or quarter of 2019 = 100
+#                             (for series that are not seasonally adjusted)
 #                scale:X      multiply by X (e.g. scale:0.001)
 #
 # Series fields (fdic, ncua)
@@ -149,12 +151,12 @@ sections:
         title: "Initial jobless claims"
         units: "4-week average, 2019 = 100"
         source: fred
-        note: "Indexed so states and the nation share one scale."
+        note: "Indexed so states and the nation share one scale. U.S. claims are seasonally adjusted; state claims are not, so each state week is compared with the same week of 2019."
         display_start: "2021-07-01"
         series:
           - {geo: US, id: ICSA,      transform: [ma4, index_2019]}
-          - {geo: IL, id: ILICLAIMS, transform: [ma4, index_2019]}
-          - {geo: WI, id: WIICLAIMS, transform: [ma4, index_2019]}
+          - {geo: IL, id: ILICLAIMS, transform: [ma4, index_2019_seasonal]}
+          - {geo: WI, id: WIICLAIMS, transform: [ma4, index_2019_seasonal]}
 
       - id: wages_yoy
         title: "Average hourly earnings, private"
@@ -317,9 +319,9 @@ sections:
 
       - id: bank_deposit_growth
         title: "Community bank deposit growth"
-        units: "% y/y, aggregate of banks under $10B"
+        units: "% y/y, same banks, under $10B a year earlier"
         source: fdic
-        note: "Cohort membership changes as banks cross $10B or merge; treat single-quarter jumps with care."
+        note: "Compares the same banks at both dates, so banks crossing $10B, merging away or closing do not distort growth. Banks whose assets grew more than 30% in the year are left out as likely acquirers."
         series:
           - {geo: US, metric: community_deposits_yoy}
           - {geo: IL, metric: community_deposits_yoy}
@@ -327,7 +329,7 @@ sections:
 
       - id: bank_loan_growth
         title: "Community bank loan growth"
-        units: "% y/y, aggregate of banks under $10B"
+        units: "% y/y, same banks, under $10B a year earlier"
         source: fdic
         series:
           - {geo: US, metric: community_loans_yoy}
